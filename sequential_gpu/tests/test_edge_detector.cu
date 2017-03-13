@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "../utils/matrix_ops.h"
 #include "../utils/gpu_consts.h"
-#include "edge_detectors_gpu.h"
+#include "../edge_detector/edge_detectors_gpu.h"
 
 void usage();
 

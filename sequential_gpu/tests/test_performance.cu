@@ -2,7 +2,7 @@
 #include <getopt.h>
 #include <cuda.h>
 #include "../utils/matrix_ops.h"
-#include "performance_gpu.h"
+#include "../performance/performance_gpu.h"
 
 void usage();
 
