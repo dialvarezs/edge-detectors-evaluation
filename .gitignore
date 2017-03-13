@@ -1,6 +1,7 @@
 *
 !*.*
 !*/
+!Makefile
 data/
 *.o
 .fuse_hidden*
