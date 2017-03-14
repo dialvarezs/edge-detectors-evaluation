@@ -2,7 +2,7 @@ DEBUG ?= 0
 ifeq ($(DEBUG), 1)
     override CFLAGS+= -arch sm_30 -g -G -lstdc++ -Xcompiler -Og -Xcompiler -Wall
 else
-	override CFLAGS+= -arch sm_30 -O3 -Xcompiler -march=native
+	override CFLAGS+= -arch sm_30 -O2 -Xcompiler -march=native
 endif
 
 CC= nvcc -ccbin=gcc-5

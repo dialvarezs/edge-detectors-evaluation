@@ -2,7 +2,7 @@ DEBUG ?= 0
 ifeq ($(DEBUG), 1)
 	override CFLAGS+= -lm -Wall -Og -g3 -O0 -shared-libgcc
 else
-	override CFLAGS+= -march=native -O3 -lm
+	override CFLAGS+= -march=native -O2 -lm
 endif
 
 CC= gcc-5
