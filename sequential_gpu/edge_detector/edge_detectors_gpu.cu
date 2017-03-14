@@ -1,4 +1,4 @@
-#include "edge_detectors_gpu.h"
+#include "edge_detectors_gpu.cuh"
 
 
 __global__ void gpu_edge_detector_g(int* img, int* edge, int width, int height, int* mask)
@@ -24,7 +24,9 @@ __global__ void gpu_edge_detector_g(int* img, int* edge, int width, int height, 
 				gx += img[l]*mask[m*3 + n];
 				gy += img[l]*mask[n*3 + m];
 			}
-		edge[i] = sqrtf(powf((float)gx/6,2) + powf((float)gy/6,2));
+		edge[i] = sqrtf(powf((float)gx,2) + powf((float)gy,2));
+		if(edge[i] > 255)
+			edge[i] =  255;
 	}
 }
 

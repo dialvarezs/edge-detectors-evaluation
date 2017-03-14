@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
-#include "matrix_ops.h"
+#include "matrix_ops.cuh"
 
 int* load_matrix(const char* filename, int* width, int* height)
 {

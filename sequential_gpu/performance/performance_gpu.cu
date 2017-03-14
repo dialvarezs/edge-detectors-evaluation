@@ -1,5 +1,5 @@
-#include "performance_gpu.h"
-#include "../utils/gpu_consts.h"
+#include "performance_gpu.cuh"
+#include "../utils/gpu_consts.cuh"
 
 
 void gpu_find_threshold_exhaustive(int* edge, int* ground_truth, int width, int height, comparison_index comparison, int* threshold, float* similarity)

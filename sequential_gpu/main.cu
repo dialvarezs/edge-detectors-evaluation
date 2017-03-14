@@ -1,16 +1,35 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
 #include <libgen.h>
 #include <sys/stat.h>
 #include <cuda.h>
-#include "utils/matrix_ops.h"
-#include "utils/gpu_consts.h"
-#include "edge_detector/edge_detectors_gpu.h"
-#include "performance/performance_gpu.h"
+#include "utils/matrix_ops.cuh"
+#include "utils/gpu_consts.cuh"
+#include "edge_detector/edge_detectors_gpu.cuh"
+#include "performance/performance_gpu.cuh"
+
+
+#define BILLION 1E9
+#define timeit_gpu(before, after, f, ...) {\
+	cudaDeviceSynchronize();\
+	clock_gettime(CLOCK_MONOTONIC, &before);\
+	f(__VA_ARGS__);\
+	cudaDeviceSynchronize();\
+	clock_gettime(CLOCK_MONOTONIC, &after);\
+}
+#define timeit_gpu_kernel(before, after, k, ...) {\
+	cudaDeviceSynchronize();\
+	clock_gettime(CLOCK_MONOTONIC, &before);\
+	k<<<BLOCKS, THREADS>>>(__VA_ARGS__);\
+	cudaDeviceSynchronize();\
+	clock_gettime(CLOCK_MONOTONIC, &after);\
+}
 
 void usage();
 char* name(char* path);
+float time_diff(struct timespec before, struct timespec after);
 
 int main(int argc, char** argv)
 {
@@ -29,16 +48,23 @@ int main(int argc, char** argv)
 	FILE* ftimes = NULL;
 
 	int w, h, size, steps, reps, threshold, threshold_cv, threshold_g;
-	float sigma, sigma_step, sigma_min, sigma_max, similarity, msecs;
+	float sigma, sigma_step, sigma_min, sigma_max, similarity;
 	char edge_dec, perf_fn, save_edge, dir[50], namebuffer[100], buffer[100];
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
-	cudaEvent_t start, stop, tstart, tstop;
+	struct timespec tspec_before, tspec_after, tspec_tbefore, tspec_tafter;
 
-	threshold_cv=threshold_g=0;
+	threshold_cv = threshold_g = 0;
 
 	matrix = load_matrix(argv[1], &w, &h);
 	ground_truth = load_matrix(argv[2], &w, &h);
+
+	for(int i=0; i<w*h; i++)
+		if(ground_truth[i] != 0 && ground_truth[i] != 1)
+		{
+			printf("This ground truth isn't binary. Exiting...");
+			return(-1);
+		}
 
 	sigma_min = atof(argv[4]);
 	sigma_max = atof(argv[5]);
@@ -85,11 +111,6 @@ int main(int argc, char** argv)
 
 	printf("exec_gpu_%s_%d%02d%02d-%02d%02d%02d\n", name(argv[1]), tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-	cudaEventCreate(&tstart);
-	cudaEventCreate(&tstop);
-
 	sigma_step = (sigma_max-sigma_min)/steps;
 	sigma=sigma_min;
 	gpu_noise_init<<<BLOCKS, THREADS>>>(time(0), states, h*w);
@@ -99,35 +120,21 @@ int main(int argc, char** argv)
 		{
 			sprintf(buffer, "%.3f %d", sigma, j+1);
 
-			cudaEventRecord(tstart, 0);
+			cudaDeviceSynchronize();
+			clock_gettime(CLOCK_MONOTONIC, &tspec_tbefore);
 
-			cudaEventRecord(start, 0);
-			gpu_noise_maker<<<BLOCKS, THREADS>>>(states, dev_matrix, dev_noisy_matrix, 1.0, sigma, h*w);
-			cudaEventRecord(stop, 0);
-			cudaEventSynchronize(stop);
-			cudaEventElapsedTime(&msecs, start, stop);
-
-			sprintf(buffer, "%s %.3f", buffer, msecs);
+			timeit_gpu_kernel(tspec_before, tspec_after, gpu_noise_maker, states, dev_matrix, dev_noisy_matrix, 1.0, sigma, h*w);
+			sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 			if(edge_dec=='c' || edge_dec=='a')
 			{
-				cudaEventRecord(start, 0);
-				gpu_edge_detector_cv<<<BLOCKS, THREADS>>>(dev_noisy_matrix, dev_edge, w, h);
-				cudaEventRecord(stop, 0);
-				cudaEventSynchronize(stop);
-				cudaEventElapsedTime(&msecs, start, stop);
-
-				sprintf(buffer, "%s %.3f", buffer, msecs);
+				timeit_gpu_kernel(tspec_before, tspec_after, gpu_edge_detector_cv, dev_noisy_matrix, dev_edge, w, h);
+				sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 				if(perf_fn=='o' || perf_fn=='a')
 				{
-					cudaEventRecord(start, 0);
-					gpu_find_threshold_optimized(0, threshold_cv, 8, 2, 0.5, dev_edge, dev_ground_truth, w, h, gpu_edge_comparison, &threshold_cv, &similarity);
-					cudaEventRecord(stop, 0);
-					cudaEventSynchronize(stop);
-					cudaEventElapsedTime(&msecs, start, stop);
-
-					sprintf(buffer, "%s %.3f", buffer, msecs);
+					timeit_gpu(tspec_before, tspec_after, gpu_find_threshold_optimized, 0, threshold_cv, 8, 2, 0.5, dev_edge, dev_ground_truth, w, h, gpu_edge_comparison, &threshold_cv, &similarity);
+					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 					fprintf(fresults, "%.3f %d cv opt %d %.6f\n", sigma, j+1, threshold_cv, similarity);
 
@@ -141,13 +148,8 @@ int main(int argc, char** argv)
 				}
 				if(perf_fn=='e' || perf_fn=='a')
 				{
-					cudaEventRecord(start, 0);
-					gpu_find_threshold_exhaustive(dev_edge, dev_ground_truth, w, h, gpu_edge_comparison, &threshold, &similarity);
-					cudaEventRecord(stop, 0);
-					cudaEventSynchronize(stop);
-					cudaEventElapsedTime(&msecs, start, stop);
-
-					sprintf(buffer, "%s %.3f", buffer, msecs);
+					timeit_gpu(tspec_before, tspec_after, gpu_find_threshold_exhaustive, dev_edge, dev_ground_truth, w, h, gpu_edge_comparison, &threshold, &similarity);
+					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 					fprintf(fresults, "%.3f %d cv exh %d %.6f\n", sigma, j+1, threshold, similarity);
 
@@ -162,23 +164,13 @@ int main(int argc, char** argv)
 			}
 			if(edge_dec=='g' || edge_dec=='a')
 			{
-				cudaEventRecord(start, 0);
-				gpu_edge_detector_g<<<BLOCKS, THREADS>>>(dev_noisy_matrix, dev_edge, w, h, dev_mask);
-				cudaEventRecord(stop, 0);
-				cudaEventSynchronize(stop);
-				cudaEventElapsedTime(&msecs, start, stop);
-
-				sprintf(buffer, "%s %.3f", buffer, msecs);
+				timeit_gpu_kernel(tspec_before, tspec_after, gpu_edge_detector_g, dev_noisy_matrix, dev_edge, w, h, dev_mask);
+				sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 				if(perf_fn=='o' || perf_fn=='a')
 				{
-					cudaEventRecord(start, 0);
-					gpu_find_threshold_optimized(0, threshold_g, 8, 2, 0.5, dev_edge, dev_ground_truth, w, h, gpu_edge_comparison, &threshold_g, &similarity);
-					cudaEventRecord(stop, 0);
-					cudaEventSynchronize(stop);
-					cudaEventElapsedTime(&msecs, start, stop);
-
-					sprintf(buffer, "%s %.3f", buffer, msecs);
+					timeit_gpu(tspec_before, tspec_after, gpu_find_threshold_optimized, 0, threshold_g, 8, 2, 0.5, dev_edge, dev_ground_truth, w, h, gpu_edge_comparison, &threshold_g, &similarity);
+					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 					fprintf(fresults, "%.3f %d g opt %d %.6f\n", sigma, j+1, threshold_g, similarity);
 
@@ -192,13 +184,8 @@ int main(int argc, char** argv)
 				}
 				if(perf_fn=='e' || perf_fn=='a')
 				{
-					cudaEventRecord(start, 0);
-					gpu_find_threshold_exhaustive(dev_edge, dev_ground_truth, w, h, gpu_edge_comparison, &threshold, &similarity);
-					cudaEventRecord(stop, 0);
-					cudaEventSynchronize(stop);
-					cudaEventElapsedTime(&msecs, start, stop);
-
-					sprintf(buffer, "%s %.3f", buffer, msecs);
+					timeit_gpu(tspec_before, tspec_after, gpu_find_threshold_exhaustive, dev_edge, dev_ground_truth, w, h, gpu_edge_comparison, &threshold, &similarity);
+					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 					fprintf(fresults, "%.3f %d g exh %d %.6f\n", sigma, j+1, threshold, similarity);
 
@@ -211,18 +198,15 @@ int main(int argc, char** argv)
 					}
 				}
 			}
-			cudaEventRecord(tstop, 0);
-			cudaEventSynchronize(tstop);
-			cudaEventElapsedTime(&msecs, tstart, tstop);
-			sprintf(buffer, "%s %.3f", buffer, msecs);
+			cudaDeviceSynchronize();
+			clock_gettime(CLOCK_MONOTONIC, &tspec_tafter);
+			sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_tbefore, tspec_tafter));
 
 			printf("%s\n", buffer);
 			fprintf(ftimes, "%s\n", buffer);
 		}
 		sigma += sigma_step;
 	}
-
-	// printf("w:%d h:%d int:%ld\n%ld %ld %ld\n", w, h, sizeof(int*), malloc_usable_size(noisy_matrix), malloc_usable_size(edge), malloc_usable_size(edge_binarized));
 
 	fclose(fresults);
 	fclose(ftimes);
@@ -261,6 +245,11 @@ char* name(char* path)
     base[i] = '\0';
 
     return base;
+}
+
+float time_diff(struct timespec before, struct timespec after)
+{
+	return (after.tv_sec - before.tv_sec) + (after.tv_nsec - before.tv_nsec) / BILLION;
 }
 
 /*

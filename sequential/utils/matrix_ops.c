@@ -85,7 +85,7 @@ void fill_borders(int* matrix, int width, int height)
 	}
 }
 
-int* noise_maker_saltpepper(int* matrix, int* noisy_matrix, int h, int w, float q)
+void noise_maker_saltpepper(int* matrix, int* noisy_matrix, int h, int w, float q)
 {
 	srand(time(0));
 
@@ -106,11 +106,9 @@ int* noise_maker_saltpepper(int* matrix, int* noisy_matrix, int h, int w, float 
 
 		noisy_matrix[y*w + x] =  s >= salt; //0 if s is in [0, salt[
 	}
-
-	return noisy_matrix;
 }
 
-int* noise_maker_additive(int* matrix, int*  noisy_matrix, int h, int w, float s)
+void noise_maker_additive(int* matrix, int*  noisy_matrix, int h, int w, float s)
 {
 	srand(time(0));
 
@@ -127,11 +125,9 @@ int* noise_maker_additive(int* matrix, int*  noisy_matrix, int h, int w, float s
 		else
 			noisy_matrix[i] = matrix[i];
 	}
-	
-	return noisy_matrix;
 }
 
-int* noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, float s)
+void noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, float s)
 {
 	srand(time(0));
 
@@ -146,8 +142,6 @@ int* noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, fl
 		else
 			noisy_matrix[i] = matrix[i];
 	}
-	
-	return noisy_matrix;
 }
 
 /*
@@ -258,31 +252,3 @@ void swap(int* a, int* b)
 	int t;
 	t=*a; *a=*b; *b=t;
 }
-
-/*
-OLD FUNCTIONS
-
-int** mmalloc(int height, int width)
-{
-	int** matrix = NULL;
-	int i;
-
-	matrix = malloc(height*sizeof(int*));
-	for(i=0; i<height; i++)
-		matrix[i] = malloc(width*sizeof(int));
-
-	return matrix;
-}
-
-void mfree(int** matrix, int height)
-{
-	int i;
-
-	for(i=0; i<height; i++)
-	{
-		free(matrix[i]);
-		// printf("[%d]", i);
-	}
-	free(matrix);
-}
-*/

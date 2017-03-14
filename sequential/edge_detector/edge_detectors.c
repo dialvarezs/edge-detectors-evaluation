@@ -4,13 +4,8 @@
 #include "../utils/matrix_ops.h"
 
 
-int* edge_detector_g(int* img, int* edge, int width, int height, int* mask)
+void edge_detector_g(int* img, int* edge, int width, int height, int* mask)
 {
-	// int** edge;
-	// int gx,gy;
-
-	// edge = mmalloc(height, width); externalización de memoria
-
 	for(int i=1; i<height-1; i++)
 		for(int j=1; j<width-1; j++)
 		{
@@ -29,17 +24,10 @@ int* edge_detector_g(int* img, int* edge, int width, int height, int* mask)
 
 	//fill borders with adyacent values
 	fill_borders(edge, width, height);
-
-	return edge;
 }
 
-int* edge_detector_cv(int* img, int* edge, int width, int height)
+void edge_detector_cv(int* img, int* edge, int width, int height)
 {
-	// int** edge;
-	//float avg, sum;
-
-	// edge = mmalloc(height, width); externalización de memoria
-
 	for(int i=1; i<height-1; i++)
 		for(int j=1; j<width-1; j++)
 		{
@@ -65,11 +53,9 @@ int* edge_detector_cv(int* img, int* edge, int width, int height)
 
 	//fill borders with adyacent values
 	fill_borders(edge, width, height);
-
-	return edge;
 }
 
-int* edge_detector_mcv(int* img, int* edge, int width, int height)
+void edge_detector_mcv(int* img, int* edge, int width, int height)
 {
 	int* values = NULL;
 
@@ -102,11 +88,9 @@ int* edge_detector_mcv(int* img, int* edge, int width, int height)
 
 	//fill borders with adyacent values
 	fill_borders(edge, width, height);
-
-	return edge;
 }
 
-int* filter_med(int* img, int* img_filtered, int width, int height)
+void filter_med(int* img, int* img_filtered, int width, int height)
 {
 	int* values = NULL;
 
@@ -126,11 +110,9 @@ int* filter_med(int* img, int* img_filtered, int width, int height)
 
 	//fill borders with adyacent values
 	fill_borders(img_filtered, width, height);
-
-	return img_filtered;
 }
 
-int* filter_avg(int* img, int* img_filtered, int width, int height)
+void filter_avg(int* img, int* img_filtered, int width, int height)
 {
 	float avg;
 
@@ -148,6 +130,4 @@ int* filter_avg(int* img, int* img_filtered, int width, int height)
 
 	//fill borders with adyacent values
 	fill_borders(img_filtered, width, height);
-
-	return img_filtered;
 }

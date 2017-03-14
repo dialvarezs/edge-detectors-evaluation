@@ -84,7 +84,7 @@ void fill_borders(int* matrix, int width, int height)
 	}
 }
 
-int* noise_maker(int* matrix, int* noisy_matrix, int h, int w, float s)
+void noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, float s)
 {
 	srand(time(0));
 
@@ -97,10 +97,8 @@ int* noise_maker(int* matrix, int* noisy_matrix, int h, int w, float s)
 				noisy_matrix[i] = 255;
 		}
 		else
-			noisy_matrix[i] = matrix[i];
+		noisy_matrix[i] = matrix[i];
 	}
-	
-	return noisy_matrix;
 }
 
 /*

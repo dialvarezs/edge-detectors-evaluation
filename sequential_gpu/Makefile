@@ -6,7 +6,7 @@ else
 endif
 
 CC= nvcc -ccbin=gcc-5
-DEPS= edge_detector/edge_detectors_gpu.h performance/performance_gpu.h utils/matrix_ops.h
+DEPS= edge_detector/edge_detectors_gpu.cuh performance/performance_gpu.cuh utils/matrix_ops.cuh
 OBJ= edge_detectors_gpu.o performance_gpu.o matrix_ops.o main.o
 
 all: main clean

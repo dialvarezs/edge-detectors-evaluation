@@ -4,20 +4,27 @@
 #include <libgen.h>
 #include <sys/time.h>
 #include <sys/stat.h>
-#include "matrix_ops/matrix_ops.h"
+#include "utils/matrix_ops.h"
 #include "edge_detector/edge_detectors.h"
 #include "performance/performance.h"
 
 
+#define BILLION 1E9
+#define timeit(before, after, f, ...) {\
+	clock_gettime(CLOCK_MONOTONIC, &before);\
+	f(__VA_ARGS__);\
+	clock_gettime(CLOCK_MONOTONIC, &after);\
+}
+
+
 void usage();
-float time_diff(struct timeval before, struct timeval after);
+float time_diff(struct timespec before, struct timespec after);
 char* name(char* path);
 
 int main(int argc, char** argv)
 {
 	int* matrix = NULL;
 	int* noisy_matrix = NULL;
-	int* filtered_matrix = NULL;
 	int* ground_truth = NULL;
 	int* edge = NULL;
 	int* edge_binarized = NULL;
@@ -25,19 +32,18 @@ int main(int argc, char** argv)
 	int w, h, steps, reps, threshold, threshold_cv, threshold_g;
 	float sigma, sigma_step, sigma_min, sigma_max, similarity;
 	char edge_dec, perf_fn, save_edge, dir[50], namebuffer[100], buffer[100];
-	int i, j;
 	FILE* fresults = NULL;
 	FILE* ftimes = NULL;
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
-	struct timeval tval_before, tval_after, tval_tbefore, tval_tafter;
+	struct timespec tspec_before, tspec_after, tspec_tbefore, tspec_tafter;
 
-	threshold_cv=threshold_g=0;
+	threshold_cv = threshold_g = 0;
 
 	matrix = load_matrix(argv[1], &w, &h);
 	ground_truth = load_matrix(argv[2], &w, &h);
 
-	for(i=0; i<w*h; i++)
+	for(int i=0; i<w*h; i++)
 		if(ground_truth[i] != 0 && ground_truth[i] != 1)
 		{
 			printf("This ground truth isn't binary. Exiting...");
@@ -70,7 +76,6 @@ int main(int argc, char** argv)
 	ftimes = fopen(namebuffer, "w");
 
 	noisy_matrix = mmalloc(h, w);
-	filtered_matrix = mmalloc(h, w);
 	edge = mmalloc(h, w);
 	if(save_edge == 'y')
 		edge_binarized = mmalloc(h, w);
@@ -78,32 +83,27 @@ int main(int argc, char** argv)
 	printf("exec_seq_%s_%d%02d%02d-%02d%02d%02d\n", name(argv[1]), tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 
 	sigma_step = (sigma_max-sigma_min)/steps;
-	for(i=0, sigma=sigma_min; i<steps; i++)
+	sigma = sigma_min;
+	for(int i=0; i<steps; i++, sigma += sigma_step)
 	{
-		for(j=0; j<reps; j++)
+		for(int j=0; j<reps; j++)
 		{
 			sprintf(buffer, "%.3f %d", sigma, j+1);
 
-			gettimeofday(&tval_tbefore, NULL);
+			clock_gettime(CLOCK_MONOTONIC, &tspec_tbefore);
 
-			gettimeofday(&tval_before, NULL);
-			noisy_matrix = noise_maker_multiplicative(matrix, noisy_matrix, h, w, sigma);
-			gettimeofday(&tval_after, NULL);
-			sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tval_before, tval_after));
+			timeit(tspec_before, tspec_after, noise_maker_multiplicative, matrix, noisy_matrix, h, w, sigma);
+			sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 			if(edge_dec=='c' || edge_dec=='a')
 			{
-				gettimeofday(&tval_before, NULL);
-				edge = edge_detector_cv(noisy_matrix, edge, w, h);
-				gettimeofday(&tval_after, NULL);
-				sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tval_before, tval_after));
+				timeit(tspec_before, tspec_after, edge_detector_cv, noisy_matrix, edge, w, h);
+				sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 				if(perf_fn=='o' || perf_fn=='a')
 				{
-					gettimeofday(&tval_before, NULL);
-					find_threshold_optimized(0, threshold_cv, 8, 2, 0.5, edge, ground_truth, w, h, edge_comparison, &threshold_cv, &similarity);
-					gettimeofday(&tval_after, NULL);
-					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tval_before, tval_after));
+					timeit(tspec_before, tspec_after, find_threshold_optimized, 0, threshold_cv, 8, 2, 0.5, edge, ground_truth, w, h, edge_comparison, &threshold_cv, &similarity);
+					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 					fprintf(fresults, "%.3f %d cv opt %d %.6f\n", sigma, j+1, threshold_cv, similarity);
 
@@ -113,10 +113,8 @@ int main(int argc, char** argv)
 				}
 				if(perf_fn=='e' || perf_fn=='a')
 				{
-					gettimeofday(&tval_before, NULL);
-					find_threshold_exhaustive(edge, ground_truth, w, h, edge_comparison, &threshold, &similarity);
-					gettimeofday(&tval_after, NULL);
-					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tval_before, tval_after));
+					timeit(tspec_before, tspec_after, find_threshold_exhaustive, edge, ground_truth, w, h, edge_comparison, &threshold, &similarity);
+					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 					fprintf(fresults, "%.3f %d cv exh %d %.6f\n", sigma, j+1, threshold, similarity);
 
@@ -127,17 +125,13 @@ int main(int argc, char** argv)
 			}
 			if(edge_dec=='g' || edge_dec=='a')
 			{
-				gettimeofday(&tval_before, NULL);
-				edge = edge_detector_g(noisy_matrix, edge, w, h, mask);
-				gettimeofday(&tval_after, NULL);
-				sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tval_before, tval_after));
+				timeit(tspec_before, tspec_after, edge_detector_g, noisy_matrix, edge, w, h, mask);
+				sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 				if(perf_fn=='o' || perf_fn=='a')
 				{
-					gettimeofday(&tval_before, NULL);
-					find_threshold_optimized(0, threshold_g, 8, 2, 0.5, edge, ground_truth, w, h, edge_comparison, &threshold_g, &similarity);
-					gettimeofday(&tval_after, NULL);
-					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tval_before, tval_after));
+					timeit(tspec_before, tspec_after, find_threshold_optimized, 0, threshold_g, 8, 2, 0.5, edge, ground_truth, w, h, edge_comparison, &threshold_g, &similarity);
+					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 					fprintf(fresults, "%.3f %d g opt %d %.6f\n", sigma, j+1, threshold_g, similarity);
 
@@ -147,10 +141,8 @@ int main(int argc, char** argv)
 				}
 				if(perf_fn=='e' || perf_fn=='a')
 				{
-					gettimeofday(&tval_before, NULL);
-					find_threshold_exhaustive(edge, ground_truth, w, h, edge_comparison, &threshold, &similarity);
-					gettimeofday(&tval_after, NULL);
-					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tval_before, tval_after));
+					timeit(tspec_before, tspec_after, find_threshold_exhaustive, edge, ground_truth, w, h, edge_comparison, &threshold, &similarity);
+					sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_before, tspec_after));
 
 					fprintf(fresults, "%.3f %d g exh %d %.6f\n", sigma, j+1, threshold, similarity);
 
@@ -159,13 +151,12 @@ int main(int argc, char** argv)
 						save_matrix(namebuffer, binarization(edge, edge_binarized, w, h, threshold), w, h);
 				}
 			}
-			gettimeofday(&tval_tafter, NULL);
-			sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tval_tbefore, tval_tafter));
+			clock_gettime(CLOCK_MONOTONIC, &tspec_tafter);
+			sprintf(buffer, "%s %.3f", buffer, 1000*time_diff(tspec_tbefore, tspec_tafter));
 			
 			printf("%s\n", buffer);
 			fprintf(ftimes, "%s\n", buffer);
 		}
-		sigma += sigma_step;
 	}
 
 	// printf("w:%d h:%d uchar:%ld\n%ld %ld %ld\n", w, h, sizeof(int*), malloc_usable_size(noisy_matrix), malloc_usable_size(edge), malloc_usable_size(edge_binarized));
@@ -190,9 +181,9 @@ void usage()
 		);
 }
 
-float time_diff(struct timeval before, struct timeval after)
+float time_diff(struct timespec before, struct timespec after)
 {
-	return (float)(after.tv_usec - before.tv_usec) / 1000000 + (float)(after.tv_sec - before.tv_sec);
+	return (after.tv_sec - before.tv_sec) + (after.tv_nsec - before.tv_nsec) / BILLION;
 }
 
 char* name(char* path)

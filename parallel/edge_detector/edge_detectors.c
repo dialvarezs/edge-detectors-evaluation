@@ -3,7 +3,7 @@
 #include "../utils/matrix_ops.h"
 
 
-int* edge_detector_g(int* img, int* edge, int width, int height, int* mask)
+void edge_detector_g(int* img, int* edge, int width, int height, int* mask)
 {
 	#pragma omp parallel for schedule(static)
 		for(int i=1; i<height-1; i++)
@@ -17,16 +17,16 @@ int* edge_detector_g(int* img, int* edge, int width, int height, int* mask)
 						gy += img[k*width + l]*mask[n*3 + m];
 					}
 
-				edge[i*width + j] = sqrt(pow((float)gx/6,2) + pow((float)gy/6,2));
+				edge[i*width + j] = sqrt(pow((float)gx,2) + pow((float)gy,2));
+				if(edge[i*width + j] > 255) //just in case
+					edge[i*width + j] = 255;
 			}
 
 	//fill borders with adyacent values
 	fill_borders(edge, width, height);
-
-	return edge;
 }
 
-int* edge_detector_cv(int* img, int* edge, int width, int height)
+void edge_detector_cv(int* img, int* edge, int width, int height)
 {
 	#pragma omp parallel for schedule(static)
 		for(int i=1; i<height-1; i++)
@@ -54,6 +54,4 @@ int* edge_detector_cv(int* img, int* edge, int width, int height)
 
 	//fill borders with adyacent values
 	fill_borders(edge, width, height);
-
-	return edge;
 }

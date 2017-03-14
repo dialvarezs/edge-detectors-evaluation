@@ -4,5 +4,7 @@
 !Makefile
 data/
 *.o
+*_old*
+*.bak*
 .fuse_hidden*
 .project
