@@ -109,7 +109,7 @@ void noise_maker_saltpepper(int* matrix, int* noisy_matrix, int h, int w, float 
 	}
 }
 
-void noise_maker_additive(int* matrix, int*  noisy_matrix, int h, int w, float s)
+void noise_maker_additive(int* matrix, int*  noisy_matrix, int h, int w, float s, unsigned seed)
 {
 	srand(time(0));
 
@@ -120,7 +120,7 @@ void noise_maker_additive(int* matrix, int*  noisy_matrix, int h, int w, float s
 	{
 		if(s != 0)
 		{
-			noisy_matrix[i] = matrix[i]+gaussrand(s, 0, &storage);
+			noisy_matrix[i] = matrix[i]+gaussrand(s, 0, &storage, seed);
 			if(noisy_matrix[i] > 255)
 				noisy_matrix[i] = 255;
 			else if(noisy_matrix[i] < 0)
@@ -131,7 +131,7 @@ void noise_maker_additive(int* matrix, int*  noisy_matrix, int h, int w, float s
 	}
 }
 
-void noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, float s)
+void noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, float s, unsigned seed)
 {
 	srand(time(0));
 
@@ -142,7 +142,7 @@ void noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, fl
 	{
 		if(s != 0)
 		{
-			noisy_matrix[i] = matrix[i]*gaussrand(s, 1, &storage);
+			noisy_matrix[i] = matrix[i]*gaussrand(s, 1, &storage, seed);
 			if(noisy_matrix[i] > 255)
 				noisy_matrix[i] = 255;
 		}
@@ -155,15 +155,15 @@ void noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, fl
 	Based on http://c-faq.com/lib/gaussian.html
 	Uses a structure to save the extra value and avoid the use of static vars 
 */
-float gaussrand(float sigma, float mu, grstg* stg)
+float gaussrand(float sigma, float mu, grstg* stg, unsigned seed)
 {
 	float X, V1, V2, U1, U2, S;
 
 	if(stg->state == 0)
 	{
 		do {
-			U1 = (float)rand() / RAND_MAX;
-			U2 = (float)rand() / RAND_MAX;
+			U1 = (float)rand_r(&seed) / RAND_MAX;
+			U2 = (float)rand_r(&seed) / RAND_MAX;
 
 			V1 = 2 * U1 - 1;
 			V2 = 2 * U2 - 1;
@@ -171,10 +171,10 @@ float gaussrand(float sigma, float mu, grstg* stg)
 		} while(S >= 1 || S == 0);
 
 		X = V1 * sqrt(-2 * log(S) / S);
-		stg->V = V2;
+		stg->V = V2 * sqrt(-2 * log(S) / S);
 	}
 	else
-		X = stg->V * sqrt(-2 * log(S) / S);
+		X = stg->V;
 
 	stg->state = 1 - stg->state;
 

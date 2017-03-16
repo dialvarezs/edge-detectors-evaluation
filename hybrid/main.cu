@@ -61,7 +61,7 @@ int main(int argc, char** argv)
 	curandState_t** states = NULL;
 	execnode* exec_list = NULL;
 
-	int w, h, size, threshold_cv, ncpu, ngpu, num_gpus, thread;
+	int w, h, size, threshold_cv, ncpu, ngpu, num_gpus;
 	float similarity, sigma, sigma_step;
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
@@ -82,6 +82,7 @@ int main(int argc, char** argv)
 	ncpu = atoi(argv[3]);
 	ngpu = atoi(argv[4]);
 
+	/* cpu memory allocation */
 	noisy_matrices = (int**)malloc(ncpu * sizeof(int*));
 	edges = (int**)malloc(ncpu * sizeof(int*));
 
@@ -91,7 +92,7 @@ int main(int argc, char** argv)
 		edges[i] = mmalloc(h, w);
 	}
 
-
+	/* gpu memory allocation */
 	dev_noisy_matrices = (int**)malloc(ngpu * sizeof(int*));
 	dev_edges = (int**)malloc(ngpu * sizeof(int*));
 
@@ -109,6 +110,9 @@ int main(int argc, char** argv)
 		cudaMalloc(&dev_matrix[i], size);
 		cudaMalloc(&dev_ground_truth[i], size);
 		cudaMalloc(&states[i], h*w*sizeof(curandState_t));
+
+		cudaMemcpy(dev_matrix[i], matrix, size, cudaMemcpyHostToDevice);
+		cudaMemcpy(dev_ground_truth[i], ground_truth, size, cudaMemcpyHostToDevice);
 	}
 	for(int i=0; i<ngpu; i++)
 	{
@@ -117,54 +121,56 @@ int main(int argc, char** argv)
 		cudaMalloc(&dev_edges[i], size);
 	}
 
-	for(int i=0; i<num_gpus; i++)
-	{
-		cudaMemcpy(dev_matrix[i], matrix, size, cudaMemcpyHostToDevice);
-		cudaMemcpy(dev_ground_truth[i], ground_truth, size, cudaMemcpyHostToDevice);
-	}
-
 
 	exec_list = (execnode*)malloc(STEPS*REPS*sizeof(execnode));
 	sigma_step = (SMAX-SMIN)/STEPS;
 	sigma = SMIN;
 	for(int i=0; i<STEPS; i++, sigma += sigma_step)
-		for(int j=0; j<REPS; j++)
+		for(int j=1; j<=REPS; j++)
 		{
-			exec_list[i*j + j].sigma = sigma;
-			exec_list[i*j + j].rep = j;
+			exec_list[i*REPS + j].sigma = sigma;
+			exec_list[i*REPS + j].rep = j;
 		}
 
 
 	for(int i=0; i<num_gpus; i++)
+	{
+		cudaSetDevice(i);
 		gpu_noise_init<<<BLOCKS, THREADS>>>(time(0), states[i], h*w);
+		cudaDeviceSynchronize();
+	}
 
-	cudaDeviceSynchronize();
 	clock_gettime(CLOCK_MONOTONIC, &tspec_tbefore);
 
-	#pragma omp parallel for schedule(guided)
+	#pragma omp parallel for private(similarity) shared(threshold_cv) schedule(dynamic, 1) num_threads(ncpu+ngpu)
 		for(int i=0; i<STEPS*REPS; i++)
 		{
-			thread = omp_get_thread_num();
+			int thread = omp_get_thread_num();
 			if(thread < ngpu)
 			{
 				cudaSetDevice(thread % num_gpus);
 				gpu_noise_maker<<<BLOCKS, THREADS>>>(states[thread % num_gpus], dev_matrix[thread % num_gpus], dev_noisy_matrices[thread], 1.0, exec_list[i].sigma, h*w);
 				gpu_edge_detector_cv<<<BLOCKS, THREADS>>>(dev_noisy_matrices[thread], dev_edges[thread], w, h);
 				gpu_find_threshold_optimized(0, threshold_cv, 8, 2, 0.5, dev_edges[thread], dev_ground_truth[thread % num_gpus], w, h, gpu_edge_comparison, &threshold_cv, &similarity);
+				// cudaDeviceSynchronize();
 			}
 			else
 			{
-				noise_maker_multiplicative(matrix, noisy_matrices[thread-ngpu], h, w, exec_list[i].sigma);
-				edge_detector_cv(matrix, edges[thread-ngpu], w, h);
-				gpu_find_threshold_optimized(0, threshold_cv, 8, 2, 0.5, edges[thread], ground_truth, w, h, gpu_edge_comparison, &threshold_cv, &similarity);
+				noise_maker_multiplicative(matrix, noisy_matrices[thread-ngpu], h, w, exec_list[i].sigma, tm.tm_sec*thread+tm.tm_mday*tm.tm_yday);
+				edge_detector_cv(noisy_matrices[thread-ngpu], edges[thread-ngpu], w, h);
+				find_threshold_optimized(0, threshold_cv, 8, 2, 0.5, edges[thread-ngpu], ground_truth, w, h, edge_comparison, &threshold_cv, &similarity);
 			}
+			// printf("%d %.3f %2d %.6f\n", thread, exec_list[i].sigma, exec_list[i].rep, similarity);
 		}
 
-	cudaDeviceSynchronize();
+	for(int i=0; i<num_gpus; i++)
+		cudaDeviceSynchronize();
 	clock_gettime(CLOCK_MONOTONIC, &tspec_tafter);
 
-	printf("exec_gpu_%s_%d%02d%02d-%02d%02d%02d %.3f\n", name(argv[1]), tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, 1000*time_diff(tspec_tbefore, tspec_tafter));
+	printf("exec_gpu_%s_%d%02d%02d-%02d%02d%02d %.3f\n", name(argv[1]), tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, time_diff(tspec_tbefore, tspec_tafter));
 
+
+	/* be free memory!!! */
 	mfree(matrix);
 	mfree(ground_truth);
 	for(int i=0; i<ncpu; i++)
@@ -172,13 +178,26 @@ int main(int argc, char** argv)
 		mfree(noisy_matrices[i]);
 		mfree(edges[i]);
 	}
-	cudaFree(dev_matrix);
-	cudaFree(dev_ground_truth);
+	free(noisy_matrices);
+	free(edges);
+	for(int i=0; i<num_gpus; i++)
+	{
+		cudaFree(dev_matrix[i]);
+		cudaFree(dev_ground_truth[i]);
+		cudaFree(states[i]);
+	}
+	free(dev_matrix);
+	free(dev_ground_truth);
+	free(states);
 	for(int i=0; i<ngpu; i++)
 	{
 		cudaFree(dev_noisy_matrices[i]);
 		cudaFree(dev_edges[i]);
 	}
+	free(dev_noisy_matrices);
+	free(dev_edges);
+
+	free(exec_list);
 
 
 	cudaDeviceReset();
