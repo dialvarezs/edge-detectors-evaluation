@@ -33,8 +33,8 @@
 
 #define SMIN 0.0
 #define SMAX 0.2
-#define STEPS 10
-#define REPS 30
+#define STEPS 20
+#define REPS 50
 
 struct execution
 {
@@ -167,7 +167,7 @@ int main(int argc, char** argv)
 		cudaDeviceSynchronize();
 	clock_gettime(CLOCK_MONOTONIC, &tspec_tafter);
 
-	printf("exec_gpu_%s_%d%02d%02d-%02d%02d%02d %.3f\n", name(argv[1]), tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, time_diff(tspec_tbefore, tspec_tafter));
+	printf("%s %d %d %.3f\n", name(argv[1]), ncpu, ngpu, time_diff(tspec_tbefore, tspec_tafter));
 
 
 	/* be free memory!!! */
@@ -233,46 +233,4 @@ float time_diff(struct timespec before, struct timespec after)
 	----
 	./main <matrix_file> <ground_truth_file> <ncpu> <ngpu>
 	----
-
-
-	exec:
-	./main <matrix_file> <ground_truth_file> <output_dir> <sigma_min> <sigma_max> <steps> <reps> <c/g/a> <save_edge(y/n)> <o/e/a> <mask_file>
-	out:
-	(results) <sigma> <rep> <edge_detector> <perf_fn> <threshold> <similarity>
-	(times) <sigma> <rep> <noise_maker> <edge_detector> <perf_fn> ... <+edges> ...
-
-	Parámetros:
-	- Matriz de imagen original
-	- Matrix de terreno de la verdad (la matriz debe ser de 0 y 1 sólamente)
-	- Directorio donde se guardarán los archivos(tiempos, resultados y mejores contornos)
-	- Parámetros de ruido(sigma_min, sigma_max, intervalos, repeticiones)
-	- Detectores de ruido a usar(cv, g). Si g agregar máscara como último parámetro.
-	- Funciones de performance a usar(o, e)
-
-	Salida:
-	- Mejor contorno por cada detector, por cada función de performance y por cada matriz de ruido generada (<=4 por matriz de ruido).
-	- Archivo con tiempos para generación de ruido, detectores de contorno y performance
-	- Tiempos totales
-
-
-	Procedimiento:
-	- Cargar matriz original y terreno de la verdad
-	por cada valor de ruido:
-		por cada repetición para valor de ruido:
-			- Generar matriz ruidosa
-			por cada detector seleccionado:
-				- Obtener contorno
-				por cada función de performance:
-					- Comparar contorno con terreno de la verdad
-					- Guardar a archivo el mejor contorno
-			- Imprimir resultados y tiempos a archivos separados
-			- Guardar matriz ruidosa
-	- Sumar tiempos e imprimir a archivo(o stdout)
-
-	TODO:
-	Arreglar la fuga de memoria!
-	
-	guardar:
-	- (mejores contornos) nombreimg_sigma_rep_detector_perf.dat
-	- (tiempos)
 */

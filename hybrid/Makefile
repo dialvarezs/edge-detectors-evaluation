@@ -9,7 +9,7 @@ CC= nvcc -ccbin=g++-5
 DEPS= edge_detector/edge_detectors_gpu.cuh performance/performance_gpu.cuh utils/matrix_ops_gpu.cuh
 OBJ= matrix_ops_gpu.o edge_detectors_gpu.o performance_gpu.o main.o
 
-all: main
+all: main clean
 
 main.o: main.cu $(DEPS)
 	$(CC) -c $< $(CFLAGS)
