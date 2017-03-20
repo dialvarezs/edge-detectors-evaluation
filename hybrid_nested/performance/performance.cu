@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "performance_gpu.cuh"
+#include "performance.cuh"
 #include "../utils/gpu_consts.cuh"
+#include "../utils/vars.h"
 
 
 void find_threshold_exhaustive(int* edge, int* ground_truth, int width, int height, comparison_index comparison, int* threshold, float* similarity)
@@ -116,16 +117,17 @@ float edge_comparison(int* edge, int* ground_truth, int threshold, int width, in
 	int success, false_pos, false_neg;
 
 	success = false_neg = false_pos = 0;
-	for(int i=0; i<height; i++)
-		for(int j=0; j<width; j++)
-		{
-			if(edge[i*width + j] >= threshold && ground_truth[i*width + j] == 1)
-				success++;
-			else if(edge[i*width + j] >= threshold && ground_truth[i*width + j] == 0)
-				false_pos++;
-			else if(edge[i*width + j] < threshold && ground_truth[i*width + j] == 1)
-				false_neg++;
-		}
+	#pragma omp parallel for reduction(+:success,false_pos,false_neg) schedule(dynamic,8) num_threads(omp_threads)
+		for(int i=0; i<height; i++)
+			for(int j=0; j<width; j++)
+			{
+				if(edge[i*width + j] >= threshold && ground_truth[i*width + j] == 1)
+					success++;
+				else if(edge[i*width + j] >= threshold && ground_truth[i*width + j] == 0)
+					false_pos++;
+				else if(edge[i*width + j] < threshold && ground_truth[i*width + j] == 1)
+					false_neg++;
+			}
 
 	// printf("succ:%d fp:%d; fn:%d = %f\n", success, false_pos, false_neg, (float)success/(success + false_neg + false_pos));
 
@@ -139,15 +141,15 @@ int* binarization(int* edge, int* binarized, int width, int height, int threshol
 	// int** binarized;
 
 	// binarized = mmalloc(height, width); 
-
-	for(int i=0; i<height; i++)
-		for(int j=0; j<width; j++)
-		{
-			if(edge[i*width + j] >= threshold) //the edges are highlighted with lighter shades
-				binarized[i*width + j] = 1;
-			else
-				binarized[i*width + j] = 0;
-		}
+	#pragma omp parallel for schedule(dynamic,8) num_threads(omp_threads)
+		for(int i=0; i<height; i++)
+			for(int j=0; j<width; j++)
+			{
+				if(edge[i*width + j] >= threshold) //the edges are highlighted with lighter shades
+					binarized[i*width + j] = 1;
+				else
+					binarized[i*width + j] = 0;
+			}
 
 	return binarized;
 }

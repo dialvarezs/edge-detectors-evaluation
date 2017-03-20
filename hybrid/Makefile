@@ -6,21 +6,21 @@ else
 endif
 
 CC= nvcc -ccbin=g++-5
-DEPS= edge_detector/edge_detectors_gpu.cuh performance/performance_gpu.cuh utils/matrix_ops_gpu.cuh
-OBJ= matrix_ops_gpu.o edge_detectors_gpu.o performance_gpu.o main.o
+DEPS= edge_detector/edge_detectors.cuh performance/performance.cuh utils/matrix_ops.cuh
+OBJ= matrix_ops.o edge_detectors.o performance.o main.o
 
 all: main clean
 
 main.o: main.cu $(DEPS)
 	$(CC) -c $< $(CFLAGS)
 
-matrix_ops_gpu.o: utils/matrix_ops_gpu.cu $(DEPS)
+matrix_ops.o: utils/matrix_ops.cu $(DEPS)
 	$(CC) -c $< $(CFLAGS)
 
-performance_gpu.o: performance/performance_gpu.cu $(DEPS)
+performance.o: performance/performance.cu $(DEPS)
 	$(CC) -c $< $(CFLAGS)
 
-edge_detectors_gpu.o: edge_detector/edge_detectors_gpu.cu $(DEPS)
+edge_detectors.o: edge_detector/edge_detectors.cu $(DEPS)
 	$(CC) -c $< $(CFLAGS)
 
 main: $(OBJ)

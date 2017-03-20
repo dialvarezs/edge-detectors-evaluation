@@ -4,7 +4,6 @@
 #include <string.h>
 #include <time.h>
 #include "matrix_ops.cuh"
-#include "vars.h"
 
 
 int* load_matrix(const char* filename, int* width, int* height)
@@ -114,24 +113,22 @@ void noise_maker_additive(int* matrix, int*  noisy_matrix, int h, int w, float s
 {
 	srand(time(0));
 
-	static grstg storage;
-
-	#pragma omp threadprivate(storage)
+	grstg storage;
 	storage.state = 0;
-	#pragma omp parallel for num_threads(omp_threads) copyin(storage)
-		for(int i=0; i<h*w; i++)
+
+	for(int i=0; i<h*w; i++)
+	{
+		if(s != 0)
 		{
-			if(s != 0)
-			{
-				noisy_matrix[i] = matrix[i]+gaussrand(s, 0, &storage, seed);
-				if(noisy_matrix[i] > 255)
-					noisy_matrix[i] = 255;
-				else if(noisy_matrix[i] < 0)
-					noisy_matrix[i] = 0;
-			}
-			else
-				noisy_matrix[i] = matrix[i];
+			noisy_matrix[i] = matrix[i]+gaussrand(s, 0, &storage, seed);
+			if(noisy_matrix[i] > 255)
+				noisy_matrix[i] = 255;
+			else if(noisy_matrix[i] < 0)
+				noisy_matrix[i] = 0;
 		}
+		else
+			noisy_matrix[i] = matrix[i];
+	}
 }
 
 void noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, float s, unsigned seed)

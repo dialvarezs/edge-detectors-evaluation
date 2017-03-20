@@ -3,14 +3,15 @@
 #include <time.h>
 #include <sys/time.h>
 #include <libgen.h>
+#include <stdbool.h>
 #include <omp.h>
 // #include <sys/stat.h>
 #include <cuda.h>
-#include "utils/matrix_ops_gpu.cuh"
+#include "utils/matrix_ops.cuh"
 #include "utils/gpu_consts.cuh"
 #include "utils/vars.h"
-#include "edge_detector/edge_detectors_gpu.cuh"
-#include "performance/performance_gpu.cuh"
+#include "edge_detector/edge_detectors.cuh"
+#include "performance/performance.cuh"
 
 
 #define BILLION 1E9
@@ -29,15 +30,17 @@
 // 	clock_gettime(CLOCK_MONOTONIC, &after);\
 // }
 
-#define SMIN 0.0
-#define SMAX 0.2
-#define STEPS 20
-#define REPS 50
+#define SMIN 0.002
+#define SMAX 0.202
+#define STEPS 50
+#define REPS 20
 
 struct execution
 {
 	float sigma;
 	int rep;
+	float time_ms;
+	bool use_gpu;
 };
 typedef struct execution execnode;
 
@@ -122,10 +125,10 @@ int main(int argc, char** argv)
 	sigma_step = (SMAX-SMIN)/STEPS;
 	sigma = SMIN;
 	for(int i=0; i<STEPS; i++, sigma += sigma_step)
-		for(int j=1; j<=REPS; j++)
+		for(int j=0; j<REPS; j++)
 		{
 			exec_list[i*REPS + j].sigma = sigma;
-			exec_list[i*REPS + j].rep = j;
+			exec_list[i*REPS + j].rep = j+1;
 		}
 
 
@@ -142,26 +145,43 @@ int main(int argc, char** argv)
 		for(int i=0; i<STEPS*REPS; i++)
 		{
 			int thread = omp_get_thread_num();
+			struct timespec tspec_before, tspec_after;
+
+			clock_gettime(CLOCK_MONOTONIC, &tspec_before);
+
 			if(thread < ngpu)
 			{
 				cudaSetDevice(thread % num_gpus);
 				gpu_noise_maker<<<BLOCKS, THREADS>>>(states[thread % num_gpus], dev_matrix[thread % num_gpus], dev_noisy_matrices[thread], 1.0, exec_list[i].sigma, h*w);
 				gpu_edge_detector_cv<<<BLOCKS, THREADS>>>(dev_noisy_matrices[thread], dev_edges[thread], w, h);
 				gpu_find_threshold_optimized(0, threshold_cv, 8, 2, 0.5, dev_edges[thread], dev_ground_truth[thread % num_gpus], w, h, gpu_edge_comparison, &threshold_cv, &similarity);
-				// cudaDeviceSynchronize();
+				cudaDeviceSynchronize();
+				exec_list[i].use_gpu = true;
 			}
 			else
 			{
 				noise_maker_multiplicative(matrix, noisy_matrix, h, w, exec_list[i].sigma, tm.tm_sec*thread+tm.tm_mday*tm.tm_yday);
 				edge_detector_cv(noisy_matrix, edge, w, h);
 				find_threshold_optimized(0, threshold_cv, 8, 2, 0.5, edge, ground_truth, w, h, edge_comparison, &threshold_cv, &similarity);
+				exec_list[i].use_gpu = false;
 			}
-			printf("%d %.3f %2d %.6f\n", thread, exec_list[i].sigma, exec_list[i].rep, similarity);
+			// printf("%d %.3f %2d %.6f\n", thread, exec_list[i].sigma, exec_list[i].rep, similarity);
+
+			clock_gettime(CLOCK_MONOTONIC, &tspec_after);
+			exec_list[i].time_ms = 1000*time_diff(tspec_before, tspec_after);
 		}
 
 	for(int i=0; i<num_gpus; i++)
 		cudaDeviceSynchronize();
 	clock_gettime(CLOCK_MONOTONIC, &tspec_tafter);
+
+	int gpu_count = 0;
+	for(int i=0; i<STEPS*REPS; i++)
+	{
+		printf("%.3f %2d %d %.3f\n", exec_list[i].sigma, exec_list[i].rep, exec_list[i].use_gpu, exec_list[i].time_ms);
+		gpu_count += exec_list[i].use_gpu;
+	}
+	printf("cpu: %d gpu: %d\n", STEPS*REPS - gpu_count, gpu_count);
 
 	printf("%s %d %d %.3f\n", name(argv[1]), ncpu, ngpu, time_diff(tspec_tbefore, tspec_tafter));
 
