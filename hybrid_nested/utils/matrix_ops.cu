@@ -138,20 +138,22 @@ void noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, fl
 {
 	srand(time(0));
 
-	grstg storage;
-	storage.state = 0;
+	static grstg storage;
 
+	#pragma omp threadprivate(storage)
+	storage.state = 0;
+	#pragma omp parallel for num_threads(omp_threads) copyin(storage)
 	for(int i=0; i<h*w; i++)
-	{
-		if(s != 0)
 		{
-			noisy_matrix[i] = matrix[i]*gaussrand(s, 1, &storage, seed);
-			if(noisy_matrix[i] > 255)
-				noisy_matrix[i] = 255;
+			if(s != 0)
+			{
+				noisy_matrix[i] = matrix[i]*gaussrand(s, 1, &storage, seed);
+				if(noisy_matrix[i] > 255)
+					noisy_matrix[i] = 255;
+			}
+			else
+				noisy_matrix[i] = matrix[i];
 		}
-		else
-			noisy_matrix[i] = matrix[i];
-	}
 }
 
 /*
