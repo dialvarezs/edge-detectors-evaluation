@@ -5,13 +5,13 @@ OPENCV= `pkg-config --cflags --libs opencv`
 all: canny clean
 
 %.o: %.cpp
-        $(CC) -c $< $(CFLAGS)
+	$(CC) -c $< $(CFLAGS)
 
-canny: Canny.o
-        $(CC) -o $@ $^ $(CFLAGS) $(OPENCV)
+canny: CannyDetector_Demo.o
+	$(CC) -o $@ $^ $(CFLAGS) $(OPENCV)
 
 clean:
-        rm -f *.o
+	rm -f *.o
 
 remove:
-        rm -f *.o canny
+	rm -f *.o canny

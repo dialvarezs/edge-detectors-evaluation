@@ -251,6 +251,7 @@ void usage()
 {
 	printf(
 		"Usage:\n"
+		"./main <matrix_file> <ground_truth_file> <ncpu> <ngpu>\n"
 		);
 }
 
@@ -273,6 +274,7 @@ float time_diff(struct timespec before, struct timespec after)
 }
 
 /*
+	Versión reducida para pruebas en plataforma heterogénea. Usa como base las versiones secuencial y GPU.
 	----
 	./main <matrix_file> <ground_truth_file> <ncpu> <ngpu>
 	----

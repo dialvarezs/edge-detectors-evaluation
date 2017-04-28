@@ -29,6 +29,8 @@ int main(int argc, char** argv)
 
 	gettimeofday(&tval_before, NULL);
 	noise_maker_multiplicative(matrix, noisy_matrix, h, w, sigma);
+	//noise_maker_additive(matrix, noisy_matrix, h, w, sigma);
+	//noise_maker_saltpepper(matrix, noisy_matrix, h, w, sigma);
 	gettimeofday(&tval_after, NULL);
 	printf("%.3f", 1000*time_diff(tval_before, tval_after));
 

@@ -104,7 +104,7 @@ void noise_maker_saltpepper(int* matrix, int* noisy_matrix, int h, int w, float 
 		} while (noisy_matrix[y*w + x] != matrix[y*w + x]); //ensures not repeated pixels
 		s = rand() % 100;
 
-		noisy_matrix[y*w + x] =  s >= salt; //0 if s is in [0, salt[
+		noisy_matrix[y*w + x] =  255*(s >= salt); //0 if s is in [0, salt[
 	}
 }
 
