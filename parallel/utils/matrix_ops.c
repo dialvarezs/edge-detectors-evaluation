@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
+#include <omp.h>
 #include "matrix_ops.h"
 
 int* load_matrix(const char* filename, int* width, int* height)
@@ -72,61 +73,70 @@ void save_matrix(const char* filename, int* matrix, int width, int height)
 
 void fill_borders(int* matrix, int width, int height)
 {
-	for(int i=1; i<height-1; i++)
-	{
-		matrix[i*width] = matrix[i*width + 1];
-		matrix[(i+1)*width-1] = matrix[(i+1)*width-2];
-	}
-	for(int i=0; i<width; i++)
-	{
-		matrix[i] = matrix[width + i];
-		matrix[width*(height-1) + i] = matrix[width*(height-1) + i];
-	}
+	#pragma omp parallel for shared(matrix, width, height)
+		for(int i=1; i<height-1; i++)
+		{
+			matrix[i*width] = matrix[i*width + 1];
+			matrix[(i+1)*width-1] = matrix[(i+1)*width-2];
+		}
+	#pragma omp parallel for shared(matrix, width, height)
+		for(int i=0; i<width; i++)
+		{
+			matrix[i] = matrix[width + i];
+			matrix[width*(height-1) + i] = matrix[width*(height-1) + i];
+		}
 }
 
 void noise_maker_multiplicative(int* matrix, int* noisy_matrix, int h, int w, float s)
 {
-	srand(time(0));
+	int max_threads = omp_get_max_threads();
+	time_t t = time(NULL);
+	struct tm tm = *localtime(&t);
+	grstg* storages = malloc(max_threads*sizeof(grstg));
+	for(int i=0; i<max_threads; i++)
+		storages[i].state = 0;
 
-	for(int i=0; i<h*w; i++)
-	{
-		if(s != 0)
+	#pragma omp parallel for shared(storages)
+		for(int i=0; i<h*w; i++)
 		{
-			noisy_matrix[i] = matrix[i]*gaussrand(s, 1);
-			if(noisy_matrix[i] > 255)
-				noisy_matrix[i] = 255;
+			int thread = omp_get_thread_num();
+			if(s != 0)
+			{
+				noisy_matrix[i] = matrix[i]*gaussrand(s, 1, &storages[thread], tm.tm_sec*thread+tm.tm_mday*tm.tm_yday);
+				if(noisy_matrix[i] > 255)
+					noisy_matrix[i] = 255;
+			}
+			else
+			noisy_matrix[i] = matrix[i];
 		}
-		else
-		noisy_matrix[i] = matrix[i];
-	}
 }
 
 /*
-	http://c-faq.com/lib/gaussian.html
-	Method discussed in Knuth and due originally to Marsaglia
+	Based on http://c-faq.com/lib/gaussian.html
+	Uses a structure to save the extra value and avoid the use of static vars 
 */
-double gaussrand(float sigma, float mu)
+float gaussrand(float sigma, float mu, grstg* stg, unsigned seed)
 {
-	static double V1, V2, S;
-	static int phase = 0;
-	double U1, U2;
-	double X;
+	float X, V1, V2, U1, U2, S;
 
-	if(phase == 0) {
+	if(stg->state == 0)
+	{
 		do {
-			U1 = (double)rand() / RAND_MAX;
-			U2 = (double)rand() / RAND_MAX;
+			U1 = (float)rand_r(&seed) / RAND_MAX;
+			U2 = (float)rand_r(&seed) / RAND_MAX;
 
 			V1 = 2 * U1 - 1;
 			V2 = 2 * U2 - 1;
 			S = V1 * V1 + V2 * V2;
-			} while(S >= 1 || S == 0);
+		} while(S >= 1 || S == 0);
 
 		X = V1 * sqrt(-2 * log(S) / S);
-	} else
-		X = V2 * sqrt(-2 * log(S) / S);
+		stg->V = V2 * sqrt(-2 * log(S) / S);
+	}
+	else
+		X = stg->V;
 
-	phase = 1 - phase;
+	stg->state = 1 - stg->state;
 
 	return mu + X * sigma;
 }

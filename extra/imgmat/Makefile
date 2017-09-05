@@ -1,4 +1,4 @@
-CC= g++-5
+CC= g++
 override CFLAGS+= -O2 -Wall -std=c++11
 DEPS= MatrixOps.h
 OBJ= MatrixOps.o

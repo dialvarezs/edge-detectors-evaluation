@@ -5,7 +5,7 @@ else
 	override CFLAGS+= -lm -O2
 endif
 
-CC= gcc-5
+CC= gcc
 DEPS= ../utils/matrix_ops.h
 OBJ= matrix_ops.o
 

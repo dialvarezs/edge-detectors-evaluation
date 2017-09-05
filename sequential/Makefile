@@ -5,7 +5,7 @@ else
 	override CFLAGS+= -march=native -O2 -lm
 endif
 
-CC= gcc-5
+CC= gcc
 DEPS= edge_detector/edge_detectors.h performance/performance.h utils/matrix_ops.h
 OBJ= edge_detectors.o performance.o matrix_ops.o
 

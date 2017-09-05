@@ -5,7 +5,7 @@ else
 	override CFLAGS+= -march=native -O2 -lm
 endif
 
-CC= gcc-5
+CC= gcc
 OPENMP= -fopenmp
 DEPS= edge_detector/edge_detectors.h performance/performance.h utils/matrix_ops.h
 OBJ= edge_detectors.o performance.o matrix_ops.o main.o
@@ -16,7 +16,7 @@ main.o: main.c $(DEPS)
 	$(CC) -c $< $(CFLAGS) $(OPENMP)
 
 matrix_ops.o: utils/matrix_ops.c $(DEPS)
-	$(CC) -c $< $(CFLAGS)
+	$(CC) -c $< $(CFLAGS) $(OPENMP)
 
 performance.o: performance/performance.c $(DEPS)
 	$(CC) -c $< $(CFLAGS) $(OPENMP)

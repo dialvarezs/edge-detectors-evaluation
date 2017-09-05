@@ -39,10 +39,10 @@ int main(int argc, char** argv)
 	if(detector == 'g')
 	{
 		mask = load_mask(argv[4]);
-		edge = edge_detector_g(mat, edge, w, h, mask);
+		edge_detector_g(mat, edge, w, h, mask);
 	}
 	else if(detector == 'c')
-		edge = edge_detector_cv(mat, edge, w, h);
+		edge_detector_cv(mat, edge, w, h);
 	else
 	{
 		fprintf(stderr, "Detector not valid\n");

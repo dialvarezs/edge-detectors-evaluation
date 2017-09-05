@@ -45,7 +45,7 @@ int main(int argc, char** argv )
 		edge_fn = argv[optind];
 		gt_fn = argv[++optind];
 		m = argv[++optind][0];
-		if(m != 'e' && m!= 'o')
+		if(m != 'e' && m != 'o')
 		{
 			fprintf(stderr, "Method not valid\n");
 			usage();
